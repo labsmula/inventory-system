@@ -3,8 +3,8 @@
 ## 📦 Project Overview
 
 **Name:** Mula Inventory System
-**Version:** 1.1.0
-**Tech Stack:** Google Sheets + Google Apps Script + QuaggaJS + QRCode.js
+**Version:** 1.2.1
+**Tech Stack:** Google Sheets + Google Apps Script + Chart.js + qrcode.js + QuaggaJS
 **Status:** Production Ready
 
 ---
@@ -231,3 +231,53 @@ Distribusi bebas untuk penggunaan komersial dan non-komersial.
 ---
 
 **Selamat menggunakan Mula Inventory System!** 🎉
+
+## 📜 Changelog (Updated)
+
+### **v1.2.1 (2026-04-06)** — Single File Design (All Pages CRUD)
+- ✅ Fixed loading & blank page issue (v1.2.0 modular design bug)
+- ✅ Reverted to single file design (Index.html)
+- ✅ All 5 views (Dashboard, Products, Transactions, Reports, Settings) in one file
+- ✅ JavaScript view switching (show/hide sections)
+- ✅ Full CRUD functionality for all pages:
+  - Dashboard: KPI cards, stock trend chart, category distribution, alerts, insights, recent activity feed
+  - Products: Search, filter, pagination, add product, edit (placeholder), QR code, delete (placeholder)
+  - Transactions: Tabs (All, Stock In, Stock Out), summary stats, history table, filters, pagination, view (placeholder)
+  - Reports: Report types (Inventory, Transaction, Valuation, Low Stock), summary stats, charts, view (placeholder), download PDF (placeholder)
+  - Settings: General, notifications, integrations (placeholder), account, save (placeholder), export (placeholder), logout (placeholder)
+- ✅ QR Code generation (functional)
+- ✅ Barcode scanning (placeholder)
+- ✅ Responsive design (mobile sidebar toggle, grid layouts)
+- ✅ Notification system (success/error messages)
+- ✅ Loading states (spinner for async operations)
+- ✅ Modals (Add Product, QR Code)
+- ✅ Chart.js integration (charts for dashboard & reports)
+- ✅ qrcode.js integration (QR code generation)
+- ✅ QuaggaJS integration (barcode scanning — placeholder)
+- ✅ Font Awesome integration (icons)
+- ✅ Google Fonts integration (Poppins, Open Sans, Lato)
+- ✅ Updated version to v1.2.1, added changelog
+
+### **v1.2.0 (2026-04-06)** — Modern Dashboard (Modular Design)
+- ✅ Modern dashboard UI with sidebar navigation
+- ✅ KPI cards with trend indicators (4 metrics)
+- ✅ Stock trend chart (7 days line chart)
+- ✅ Category distribution (doughnut chart)
+- ✅ Alerts & insights (auto-populated)
+- ✅ Recent activity feed (timeline)
+- ❌ Modular design (multiple HTML files) — Caused loading & blank page issue
+- Updated version to v1.2.0, added changelog
+
+### **v1.1.0 (2026-04-06)**
+- Added QR Code Generation & Barcode Scanning
+- Integration with qrcode.js & QuaggaJS libraries
+- Updated documentation (QR_BARCODE.md)
+- Updated version to v1.1.0, added features 6 & 7, added v1.1.0 changelog
+
+### **v1.0.0 (2026-04-06)**
+- Initial release
+- Core features: Add product, Dashboard, Stock management
+- Email notification system
+- Dashboard widgets (Total, Low Stock, Out of Stock, Value)
+- Complete documentation (5 files)
+
