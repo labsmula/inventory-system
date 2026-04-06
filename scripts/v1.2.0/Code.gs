@@ -1,5 +1,5 @@
 // Google Apps Script Backend untuk Mula Inventory System
-// Version: 1.2.0 (Modern Dashboard Features)
+// Version: 1.2.0 (Modern Dashboard Features + Modular Design)
 
 // Serve HTML UI
 function doGet() {
@@ -24,17 +24,23 @@ function addProduct(productData) {
     }
     
     // Cek apakah SKU sudah ada (METODE FIX: Gunakan getDataRange)
-    const lastRow = sheet.getLastRow();
     let existingSKUs = [];
     
-    if (lastRow && lastRow.getRowIndex() > 0) {
+    try {
       const data = sheet.getDataRange().getValues();
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        if (row[0] && row[0] !== "") {
-          existingSKUs.push(row[0]);
+      
+      // Cek apakah ada data (header + rows)
+      if (data.length > 1) {
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          // Cek kolom SKU (index 0) dan pastikan tidak empty
+          if (row[0] && row[0] !== "") {
+            existingSKUs.push(row[0]);
+          }
         }
       }
+    } catch (error) {
+      console.error('Error getting existing SKUs:', error);
     }
     
     if (existingSKUs.includes(productData.sku)) {
@@ -686,5 +692,89 @@ function getRecentActivity(limit) {
       success: false,
       message: "Error: " + error.toString()
     };
+  }
+}
+
+// --- VIEW LOADER FUNCTIONS (v1.2.0) ---
+
+// Get HTML content for view (Dashboard, Products, Transactions, Reports, Settings)
+function getHtml(view) {
+  try {
+    let htmlContent = '';
+    
+    switch(view) {
+      case 'dashboard':
+        // Return Dashboard.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
+        break;
+        
+      case 'products':
+        // Return Products.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Products.html');
+        break;
+        
+      case 'transactions':
+        // Return Transactions.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Transactions.html');
+        break;
+        
+      case 'reports':
+        // Return Reports.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Reports.html');
+        break;
+        
+      case 'settings':
+        // Return Settings.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Settings.html');
+        break;
+        
+      default:
+        // Default to dashboard
+        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
+    }
+    
+    return htmlContent;
+    
+  } catch (error) {
+    return HtmlService.createHtmlOutput('<h1>Error loading view: ' + error.message + '</h1>');
+  }
+}
+
+// Alternative: Get HTML content as string (for iframe/dynamic loading)
+function getHtmlContent(view) {
+  try {
+    let htmlString = '';
+    
+    // Load HTML file content
+    switch(view) {
+      case 'dashboard':
+        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
+        break;
+        
+      case 'products':
+        htmlString = HtmlService.createHtmlOutputFromFile('Products.html').getContent();
+        break;
+        
+      case 'transactions':
+        htmlString = HtmlService.createHtmlOutputFromFile('Transactions.html').getContent();
+        break;
+        
+      case 'reports':
+        htmlString = HtmlService.createHtmlOutputFromFile('Reports.html').getContent();
+        break;
+        
+      case 'settings':
+        htmlString = HtmlService.createHtmlOutputFromFile('Settings.html').getContent();
+        break;
+        
+      default:
+        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
+    }
+    
+    // Return as string
+    return htmlString;
+    
+  } catch (error) {
+    return '<h1>Error loading view: ' + error.message + '</h1>';
   }
 }

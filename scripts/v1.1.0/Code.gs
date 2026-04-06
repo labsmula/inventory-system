@@ -1,10 +1,10 @@
 // Google Apps Script Backend untuk Mula Inventory System
-// Version: 1.1.0 (QR Code & Barcode Scanning Features)
+// Version: 1.2.0 (Modern Dashboard Features + Modular Design)
 
 // Serve HTML UI
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle("Mula Inventory System")
+    .setTitle("Mula Inventory System v1.2.0")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -24,17 +24,23 @@ function addProduct(productData) {
     }
     
     // Cek apakah SKU sudah ada (METODE FIX: Gunakan getDataRange)
-    const lastRow = sheet.getLastRow();
     let existingSKUs = [];
     
-    if (lastRow && lastRow.getRowIndex() > 0) {
+    try {
       const data = sheet.getDataRange().getValues();
-      for (let i = 1; i < data.length; i++) {
-        const row = data[i];
-        if (row[0] && row[0] !== "") {
-          existingSKUs.push(row[0]);
+      
+      // Cek apakah ada data (header + rows)
+      if (data.length > 1) {
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          // Cek kolom SKU (index 0) dan pastikan tidak empty
+          if (row[0] && row[0] !== "") {
+            existingSKUs.push(row[0]);
+          }
         }
       }
+    } catch (error) {
+      console.error('Error getting existing SKUs:', error);
     }
     
     if (existingSKUs.includes(productData.sku)) {
@@ -52,6 +58,7 @@ function addProduct(productData) {
       productData.satuan,
       productData.hargaBeli,
       productData.hargaJual,
+      productData.hargaJual - productData.hargaBeli,  // Margin
       productData.minStok,
       new Date()
     ]);
@@ -245,12 +252,12 @@ function updateStock(sku, quantity, type) {
       ? existingData.keluar + quantity 
       : existingData.keluar;
     
-    stokSheet.getRange(rowIndex, 3, 1, 3).setValues([[
+    stokSheet.getRange(rowIndex, 3, 1, 6).setValues([[
       existingData.stokAwal,
       newMasuk,
       newKeluar,
       stokBaru,
-      "OK",
+      stokBaru <= 0 ? "OUT OF STOCK" : "OK",
       new Date()
     ]]);
     
@@ -382,7 +389,7 @@ function generateQRCode(sku) {
   }
 }
 
-// --- BARCODE SCANNING FUNCTIONS (FULL IMPLEMENTATION) ---
+// --- BARCODE SCANNING FUNCTIONS ---
 
 // Verify barcode SKU exists
 function verifyBarcodeSKU(sku) {
@@ -438,5 +445,336 @@ function verifyBarcodeSKU(sku) {
       success: false,
       message: "Error: " + error.toString()
     };
+  }
+}
+
+// --- DASHBOARD FUNCTIONS (v1.2.0) ---
+
+// Get dashboard trends data (stock over time)
+function getDashboardTrends(days) {
+  try {
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    const data = stokSheet.getDataRange().getValues();
+    const headers = data[0];
+    const products = data.slice(1);
+    
+    // Calculate date range
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setDate(today.getDate() - days);
+    
+    // Initialize trend data
+    const trends = [];
+    const trendMap = {};
+    
+    // Populate trend data for each day
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dateStr = Utilities.formatDate(date, "GMT", "dd/MM/yyyy");
+      trends.push({
+        date: dateStr,
+        totalStock: 0
+      });
+      trendMap[dateStr] = trends.length - 1;
+    }
+    
+    // Sum stock for each product at current time
+    let totalStock = 0;
+    for (let i = 0; i < products.length; i++) {
+      const stokAkhir = products[i][4];  // Kolom Stok Akhir
+      if (stokAkhir) {
+        totalStock += stokAkhir;
+      }
+    }
+    
+    // Fill current stock for today
+    const todayStr = Utilities.formatDate(today, "GMT", "dd/MM/yyyy");
+    if (trendMap[todayStr] !== undefined) {
+      trends[trendMap[todayStr]].totalStock = totalStock;
+    }
+    
+    // Simple interpolation for previous days (assuming linear trend)
+    // In production, this should use actual historical data from transaction logs
+    for (let i = 0; i < trends.length; i++) {
+      if (trends[i].totalStock === 0) {
+        // Use next available data point
+        for (let j = i + 1; j < trends.length; j++) {
+          if (trends[j].totalStock > 0) {
+            trends[i].totalStock = trends[j].totalStock;
+            break;
+          }
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      data: trends
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Get category distribution
+function getCategoryDistribution() {
+  try {
+    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Master Produk");
+    const data = masterSheet.getDataRange().getValues();
+    const products = data.slice(1);
+    
+    // Count products per category
+    const categoryCount = {};
+    let totalProducts = 0;
+    
+    for (let i = 0; i < products.length; i++) {
+      const kategori = products[i][2];  // Kolom Kategori
+      if (kategori) {
+        categoryCount[kategori] = (categoryCount[kategori] || 0) + 1;
+        totalProducts++;
+      }
+    }
+    
+    // Convert to array with percentages
+    const distribution = [];
+    for (const [kategori, count] of Object.entries(categoryCount)) {
+      distribution.push({
+        category: kategori,
+        count: count,
+        percentage: Math.round((count / totalProducts) * 100)
+      });
+    }
+    
+    // Sort by count descending
+    distribution.sort((a, b) => b.count - a.count);
+    
+    return {
+      success: true,
+      data: distribution
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Get top selling products
+function getTopSellers(limit) {
+  try {
+    const transaksiKeluarSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Keluar");
+    const data = transaksiKeluarSheet.getDataRange().getValues();
+    const transactions = data.slice(1);
+    
+    // Count transactions per product
+    const productSales = {};
+    
+    for (let i = 0; i < transactions.length; i++) {
+      const sku = transactions[i][0];  // Kolom SKU
+      const quantity = transactions[i][2];  // Kolom Kuantitas
+      
+      if (sku && quantity) {
+        if (!productSales[sku]) {
+          productSales[sku] = {
+            sku: sku,
+            totalSold: 0,
+            transactions: 0
+          };
+        }
+        productSales[sku].totalSold += quantity;
+        productSales[sku].transactions += 1;
+      }
+    }
+    
+    // Convert to array and sort by total sold
+    const topSellers = Object.values(productSales).sort((a, b) => b.totalSold - a.totalSold);
+    
+    // Get top N products
+    const limitedTopSellers = topSellers.slice(0, limit);
+    
+    // Add product names from Master Produk
+    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Master Produk");
+    const masterData = masterSheet.getDataRange().getValues();
+    
+    for (let i = 0; i < limitedTopSellers.length; i++) {
+      const sku = limitedTopSellers[i].sku;
+      for (let j = 1; j < masterData.length; j++) {
+        if (masterData[j][0] === sku) {  // Kolom SKU
+          limitedTopSellers[i].namaProduk = masterData[j][1];  // Kolom Nama Produk
+          break;
+        }
+      }
+    }
+    
+    return {
+      success: true,
+      data: limitedTopSellers
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Get recent activity
+function getRecentActivity(limit) {
+  try {
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    const data = stokSheet.getDataRange().getValues();
+    const products = data.slice(1);
+    
+    // Collect recent activities
+    const activities = [];
+    
+    for (let i = 0; i < products.length; i++) {
+      const sku = products[i][0];  // Kolom SKU
+      const namaProduk = products[i][1];  // Kolom Nama Produk
+      const stokAwal = products[i][2];  // Kolom Stok Awal
+      const stokAkhir = products[i][4];  // Kolom Stok Akhir
+      const lastUpdated = products[i][7];  // Kolom Last Updated
+      
+      // If stock changed, add activity
+      if (stokAkhir !== stokAwal && lastUpdated) {
+        activities.push({
+          type: stokAkhir > stokAwal ? "Stock In" : "Stock Out",
+          sku: sku,
+          namaProduk: namaProduk,
+          quantity: Math.abs(stokAkhir - stokAwal),
+          timestamp: lastUpdated
+        });
+      }
+    }
+    
+    // Sort by timestamp descending
+    activities.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    // Get top N activities
+    const recentActivities = activities.slice(0, limit);
+    
+    // Format timestamps
+    for (let i = 0; i < recentActivities.length; i++) {
+      const timestamp = new Date(recentActivities[i].timestamp);
+      recentActivities[i].timeStr = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "HH:mm");
+      recentActivities[i].dateStr = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "dd/MM/yyyy");
+      
+      // Add relative time (e.g., "2 hours ago")
+      const now = new Date();
+      const diffMs = now - timestamp;
+      const diffHrs = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      if (diffHrs < 1) {
+        recentActivities[i].relativeTime = "Just now";
+      } else if (diffHrs < 24) {
+        recentActivities[i].relativeTime = diffHrs + " hour" + (diffHrs > 1 ? "s" : "") + " ago";
+      } else {
+        recentActivities[i].relativeTime = diffDays + " day" + (diffDays > 1 ? "s" : "") + " ago";
+      }
+    }
+    
+    return {
+      success: true,
+      data: recentActivities
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// --- VIEW LOADER FUNCTIONS (v1.2.0) ---
+
+// Get HTML content for view (Dashboard, Products, Transactions, Reports, Settings)
+function getHtml(view) {
+  try {
+    let htmlContent = '';
+    
+    switch(view) {
+      case 'dashboard':
+        // Return Dashboard.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
+        break;
+        
+      case 'products':
+        // Return Products.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Products.html');
+        break;
+        
+      case 'transactions':
+        // Return Transactions.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Transactions.html');
+        break;
+        
+      case 'reports':
+        // Return Reports.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Reports.html');
+        break;
+        
+      case 'settings':
+        // Return Settings.html content
+        htmlContent = HtmlService.createHtmlOutputFromFile('Settings.html');
+        break;
+        
+      default:
+        // Default to dashboard
+        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
+    }
+    
+    return htmlContent;
+    
+  } catch (error) {
+    return HtmlService.createHtmlOutput('<h1>Error loading view: ' + error.message + '</h1>');
+  }
+}
+
+// Alternative: Get HTML content as string (for iframe/dynamic loading)
+function getHtmlContent(view) {
+  try {
+    let htmlString = '';
+    
+    // Load HTML file content
+    switch(view) {
+      case 'dashboard':
+        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
+        break;
+        
+      case 'products':
+        htmlString = HtmlService.createHtmlOutputFromFile('Products.html').getContent();
+        break;
+        
+      case 'transactions':
+        htmlString = HtmlService.createHtmlOutputFromFile('Transactions.html').getContent();
+        break;
+        
+      case 'reports':
+        htmlString = HtmlService.createHtmlOutputFromFile('Reports.html').getContent();
+        break;
+        
+      case 'settings':
+        htmlString = HtmlService.createHtmlOutputFromFile('Settings.html').getContent();
+        break;
+        
+      default:
+        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
+    }
+    
+    // Return as string
+    return htmlString;
+    
+  } catch (error) {
+    return '<h1>Error loading view: ' + error.message + '</h1>';
   }
 }
