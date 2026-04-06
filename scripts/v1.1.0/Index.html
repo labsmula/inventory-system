@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mula Inventory System v1.1.0</title>
+  
+  <!-- Libraries untuk QR Code & Barcode Scanning -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/quagga@0.12.1/dist/quagga.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    body {
+      background: #f5f5f5;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+      font-size: 24px;
+    }
+    .tabs {
+      display: flex;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      color: #666;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+    .tab:hover {
+      color: #333;
+      background: #f9f9f9;
+    }
+    .tab.active {
+      color: #333;
+      border-bottom: 2px solid #4CAF50;
+      margin-bottom: -2px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: #4CAF50;
+      box-shadow: 0 0 5px rgba(76,175,80,0.2);
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .table-container {
+      margin-top: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      background: #f8f8f8;
+      font-weight: bold;
+      color: #333;
+    }
+    .low-stock {
+      background: #fff3cd;
+      color: #c0392b;
+    }
+    .out-of-stock {
+      background: #ffebee;
+      color: #c0392b;
+    }
+    .notification {
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+      display: none;
+    }
+    .success {
+      background: #dff0d8;
+      border: 1px solid #3c763d;
+      color: #3c763d;
+    }
+    .error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+    }
+    .loading {
+      text-align: center;
+      padding: 20px;
+      display: none;
+    }
+    .dashboard-widgets {
+      margin-top: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+    }
+    .widget {
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .widget-total {
+      background: #4CAF50;
+      color: white;
+    }
+    .widget-low {
+      background: #FF9800;
+      color: white;
+    }
+    .widget-out {
+      background: #9C27B0;
+      color: white;
+    }
+    .widget-value {
+      background: #2196F3;
+      color: white;
+    }
+    .widget h3 {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+    .widget p {
+      margin: 10px 0 0 0;
+      font-size: 28px;
+      font-weight: bold;
+    }
+    .barcode-scanner {
+      margin: 20px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    .barcode-scanner video {
+      width: 100%;
+      height: 300px;
+      background: #000;
+    }
+    .barcode-controls {
+      padding: 10px;
+      background: #f9f9f9;
+      display: flex;
+      gap: 10px;
+    }
+    .barcode-controls button {
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+    .qr-code-container {
+      text-align: center;
+      margin: 20px 0;
+      padding: 20px;
+      background: #f9f9f9;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .qr-code-display {
+      display: inline-block;
+      margin: 10px 0;
+    }
+    .qr-info {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Mula Inventory System</h1>
+    
+    <div class="dashboard-widgets">
+      <div class="widget widget-total">
+        <h3>TOTAL PRODUK</h3>
+        <p id="total-products-count">0</p>
+      </div>
+      <div class="widget widget-low">
+        <h3>LOW STOCK</h3>
+        <p id="low-stock-count">0</p>
+      </div>
+      <div class="widget widget-out">
+        <h3>OUT OF STOCK</h3>
+        <p id="out-of-stock-count">0</p>
+      </div>
+      <div class="widget widget-value">
+        <h3>INVENTORY VALUE</h3>
+        <p id="inventory-value">Rp 0</p>
+      </div>
+    </div>
+    
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('add-product')">Tambah Produk</div>
+      <div class="tab" onclick="switchTab('dashboard')">Dashboard</div>
+    </div>
+    
+    <div id="notification" class="notification"></div>
+    <div id="loading" class="loading">⏳ Loading...</div>
+    
+    <div id="add-product-form">
+      <div class="form-group">
+        <label>SKU</label>
+        <input type="text" id="sku" placeholder="Masukkan SKU produk (contoh: P001)">
+      </div>
+      
+      <!-- Barcode Scanning UI -->
+      <div class="form-group">
+        <label>📷 Scan Barcode (Opsional)</label>
+        <div style="display: flex; gap: 10px;">
+          <input type="text" id="barcode-sku" placeholder="SKU akan otomatis terisi" readonly style="background: #f9f9f9;">
+          <button type="button" onclick="startBarcodeScanner()" style="padding: 10px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            📷 Scan
+          </button>
+        </div>
+        <div id="barcode-scanner" class="barcode-scanner" style="display: none;">
+          <div id="barcode-video-container"></div>
+          <div class="barcode-controls">
+            <button type="button" onclick="stopBarcodeScanner()" style="background: #f44336; color: white;">Stop Scan</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nama Produk</label>
+        <input type="text" id="nama_produk" placeholder="Masukkan nama produk">
+      </div>
+      <div class="form-group">
+        <label>Kategori</label>
+        <select id="kategori">
+          <option value="F&B">F&B</option>
+          <option value="Retail">Retail</option>
+          <option value="Jasa">Jasa</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Satuan</label>
+        <select id="satuan">
+          <option value="kg">kg</option>
+          <option value="liter">liter</option>
+          <option value="pcs">pcs</option>
+          <option value="botol">botol</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Harga Beli (Rp)</label>
+        <input type="number" id="harga_beli" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Harga Jual (Rp)</label>
+        <input type="number" id="harga_jual" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>Minimum Stok</label>
+        <input type="number" id="min_stok" placeholder="10">
+      </div>
+      <button onclick="addProduct()">+ Tambah Produk</button>
+    </div>
+    
+    <div id="dashboard-view" style="display: none;">
+      <div class="form-group">
+        <label>Cari Produk</label>
+        <input type="text" id="search_product" placeholder="Cari berdasarkan nama atau SKU" onkeyup="searchProducts()">
+      </div>
+      <div class="table-container">
+        <table id="products-table">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th>Nama Produk</th>
+              <th>Kategori</th>
+              <th>Stok</th>
+              <th>Status</th>
+              <th>QR Code</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="products-tbody">
+            <tr><td colspan="8" style="text-align: center;">Loading data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <!-- QR Code Modal -->
+      <div id="qr-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+        <div style="background: white; margin: 100px auto; padding: 30px; max-width: 400px; border-radius: 10px; text-align: center;">
+          <h3>QR Code Produk</h3>
+          <div id="qr-code-display" style="margin: 20px 0;"></div>
+          <p id="qr-product-name" style="margin-bottom: 20px; font-weight: bold;"></p>
+          <button onclick="closeQRModal()" style="padding: 10px 20px; background: #666; color: white; border: none; border-radius: 5px; cursor: pointer;">Tutup</button>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>  
+  <script>
+    function switchTab(tab) {
+      if (tab === 'add-product') {
+        document.getElementById('add-product-form').style.display = 'block';
+        document.getElementById('dashboard-view').style.display = 'none';
+        document.querySelector('.tab.active').classList.remove('active');
+        document.querySelectorAll('.tab')[0].classList.add('active');
+      } else {
+        document.getElementById('add-product-form').style.display = 'none';
+        document.getElementById('dashboard-view').style.display = 'block';
+        document.querySelector('.tab.active').classList.remove('active');
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        loadProducts();
+      }
+    }
+    
+    function addProduct() {
+      const sku = document.getElementById('sku').value.trim();
+      const namaProduk = document.getElementById('nama_produk').value.trim();
+      const kategori = document.getElementById('kategori').value;
+      const satuan = document.getElementById('satuan').value;
+      const hargaBeli = document.getElementById('harga_beli').value;
+      const hargaJual = document.getElementById('harga_jual').value;
+      const minStok = document.getElementById('min_stok').value;
+      
+      // Validation
+      if (!sku || !namaProduk || !hargaBeli || !hargaJual || !minStok) {
+        showNotification('Mohon lengkapi semua field!', 'error');
+        return;
+      }
+      
+      const productData = {
+        sku: sku,
+        nama: namaProduk,
+        kategori: kategori,
+        satuan: satuan,
+        hargaBeli: parseInt(hargaBeli),
+        hargaJual: parseInt(hargaJual),
+        minStok: parseInt(minStok)
+      };
+      
+      showLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          showNotification(response.message || 'Produk berhasil ditambah!', 'success');
+          document.getElementById('add-product-form').reset();
+          loadProducts(); // Refresh dashboard
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showNotification('Error: ' + error.message, 'error');
+        })
+        .addProduct(productData);
+    }
+    
+    function loadProducts() {
+      showLoading(true);
+      
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          
+          // Render products table
+          displayProducts(response.products);
+          
+          // Render dashboard widgets
+          renderDashboard(response.dashboard);
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showNotification('Error: ' + error.message, 'error');
+        })
+        .getData();
+    }
+    
+    function displayProducts(products) {
+      const tbody = document.getElementById('products-tbody');
+      tbody.innerHTML = '';
+      
+      if (!products || products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Tidak ada data produk</td></tr>';
+        return;
+      }
+      
+      products.forEach(function(product) {
+        const row = document.createElement('tr');
+        
+        if (product.stok <= 0) {
+          row.classList.add('out-of-stock');
+        } else if (product.stok <= product.minStok) {
+          row.classList.add('low-stock');
+        }
+        
+        row.innerHTML = `
+          <td>${product.sku}</td>
+          <td>${product.nama}</td>
+          <td>${product.kategori}</td>
+          <td>${product.stok} ${product.satuan}</td>
+          <td>${product.status}</td>
+          <td><button onclick="generateProductQRCode('${product.sku}', '${product.nama.replace(/'/g, "\\'")}')" style="padding: 5px 10px; background: #9C27B0; color: white; border: none; border-radius: 3px; cursor: pointer;">QR</button></td>
+          <td><button onclick="editProduct('${product.sku}')" style="padding: 5px 10px; background: #2196F3; color: white; border: none; border-radius: 3px; cursor: pointer;">Edit</button></td>
+        `;
+        
+        tbody.appendChild(row);
+      });
+    }
+    
+    function renderDashboard(dashboard) {
+      document.getElementById('total-products-count').textContent = dashboard.totalProducts;
+      document.getElementById('low-stock-count').textContent = dashboard.lowStockCount;
+      document.getElementById('out-of-stock-count').textContent = dashboard.outOfStockCount;
+      document.getElementById('inventory-value').textContent = dashboard.inventoryValue;
+    }
+    
+    function searchProducts() {
+      const searchTerm = document.getElementById('search_product').value.toLowerCase();
+      const rows = document.querySelectorAll('#products-tbody tr');
+      
+      rows.forEach(function(row) {
+        const sku = row.cells[0].textContent.toLowerCase();
+        const nama = row.cells[1].textContent.toLowerCase();
+        
+        if (sku.includes(searchTerm) || nama.includes(searchTerm)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    }
+    
+    function showNotification(message, type) {
+      const notification = document.getElementById('notification');
+      notification.textContent = message;
+      notification.className = 'notification ' + type;
+      notification.style.display = 'block';
+      
+      setTimeout(function() {
+        notification.style.display = "none";
+      }, 3000);
+    }
+    
+    function showLoading(show) {
+      const loading = document.getElementById('loading');
+      loading.style.display = show ? 'block' : 'none';
+    }
+    
+    function editProduct(sku) {
+      alert('Fitur edit produk akan diimplementasikan di versi berikutnya. Untuk saat ini, Anda bisa menghapus produk melalui Google Sheets.');
+    }
+    
+    // --- BARCODE SCANNING FUNCTIONS ---
+    
+    let videoStream = null;
+    let quagga = null;
+    
+    // Start barcode scanner
+    function startBarcodeScanner() {
+      // Check browser support
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Browser ini tidak mendukung akses kamera untuk barcode scanning.');
+        return;
+      }
+      
+      showLoading(true);
+      
+      // Akses kamera
+      navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: "environment",
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      })
+      .then(function(stream) {
+        videoStream = stream;
+        const videoContainer = document.getElementById('barcode-video-container');
+        const videoElement = document.createElement('video');
+        videoElement.srcObject = stream;
+        videoElement.width = 300;
+        videoElement.height = 200;
+        videoElement.style.width = "100%";
+        videoElement.style.height = "200px";
+        videoElement.setAttribute('playsinline', '');
+        videoElement.style.objectFit = 'cover';
+        videoContainer.style.display = 'block';
+        videoContainer.innerHTML = '';
+        videoContainer.appendChild(videoElement);
+        
+        // Show scanner UI
+        document.getElementById('barcode-scanner').style.display = 'block';
+        
+        // Initialize QuaggaJS
+        quagga = new Quagga();
+        quagga.init({
+          inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: videoElement,
+            constraints: {
+              facingMode: "environment",
+              width: 640,
+              height: 480
+            }
+          },
+          decoder: {
+            readers: ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "code_93_reader", "code_128_reader", "ean_13_reader", "upc_reader", "upc_e_reader"]
+          },
+          locate: true,
+          frequency: 10
+        });
+        
+        showLoading(false);
+        
+        // Start scanning
+        quagga.start();
+        
+        // Listen for detected codes
+        quagga.onDetected(function(result) {
+          if (result.codeResult && result.codeResult.code) {
+            const scannedSKU = result.codeResult.code;
+            document.getElementById('barcode-sku').value = scannedSKU;
+            
+            // Auto-fill SKU field
+            document.getElementById('sku').value = scannedSKU;
+            
+            // Verify SKU exists in database
+            google.script.run
+              .withSuccessHandler(function(response) {
+                if (response.success) {
+                  // Auto-fill form fields
+                  document.getElementById('nama_produk').value = response.data.nama;
+                  document.getElementById('kategori').value = response.data.kategori;
+                  document.getElementById('satuan').value = response.data.satuan;
+                  document.getElementById('harga_beli').value = response.data.hargaBeli;
+                  document.getElementById('harga_jual').value = response.data.hargaJual;
+                  document.getElementById('min_stok').value = response.data.minStok;
+                  
+                  showNotification('Barcode terdeteksi: ' + scannedSKU, 'success');
+                  stopBarcodeScanner(); // Stop setelah scan sukses
+                } else {
+                  showNotification('Barcode SKU tidak ditemukan! ' + response.message, 'error');
+                }
+              })
+              .withFailureHandler(function(error) {
+                showNotification('Error memverifikasi barcode: ' + error.message, 'error');
+              })
+              .verifyBarcodeSKU(scannedSKU);
+          }
+        });
+      })
+      .catch(function(error) {
+        showLoading(false);
+        alert('Gagal mengakses kamera: ' + error);
+        console.error('Camera access error:', error);
+      });
+    }
+    
+    // Stop barcode scanner
+    function stopBarcodeScanner() {
+      if (videoStream) {
+        videoStream.getTracks().forEach(function(track) {
+          track.stop();
+        });
+        videoStream = null;
+      }
+      
+      if (quagga) {
+        quagga.stop();
+        quagga = null;
+      }
+      
+      const videoContainer = document.getElementById('barcode-video-container');
+      if (videoContainer) {
+        videoContainer.innerHTML = '';
+      }
+      document.getElementById('barcode-scanner').style.display = 'none';
+    }
+    
+    // --- QR CODE FUNCTIONS ---
+    
+    // Generate QR Code for product
+    function generateProductQRCode(sku, namaProduk) {
+      showLoading(true);
+      
+      // Fetch product data dari backend
+      google.script.run
+        .withSuccessHandler(function(response) {
+          showLoading(false);
+          
+          if (response.success) {
+            const url = response.data.url;
+            
+            // Clear previous QR code
+            const qrDisplay = document.getElementById('qr-code-display');
+            qrDisplay.innerHTML = '';
+            
+            // Generate QR Code menggunakan qrcode.js
+            new QRCode(qrDisplay, {
+              text: url,
+              width: 128,
+              height: 128,
+              colorDark: "#000000",
+              colorLight: "#ffffff",
+              correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            // Set product name
+            document.getElementById('qr-product-name').textContent = response.data.nama;
+            
+            // Show modal
+            document.getElementById('qr-modal').style.display = 'block';
+            
+            showNotification('QR Code berhasil di-generate!', 'success');
+          } else {
+            showNotification('Error: ' + response.message, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          showLoading(false);
+          showNotification('Error fetching product data: ' + error.message, 'error');
+        })
+        .generateQRCode(sku);
+    }
+    
+    // Close QR modal
+    function closeQRModal() {
+      document.getElementById('qr-modal').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
