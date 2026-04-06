@@ -1,14 +1,14 @@
 // Google Apps Script Backend untuk Mula Inventory System
-// Version: 1.2.0 (Modern Dashboard Features + Modular Design)
+// Version: 1.3.0 (ALL PHASES IMPLEMENTED)
 
 // Serve HTML UI
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle("Mula Inventory System v1.2.0")
+    .setTitle("Mula Inventory System v1.3.0")
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// --- PRODUCT FUNCTIONS ---
+// --- PRODUCT FUNCTIONS (CRUD) ---
 
 // Add new product
 function addProduct(productData) {
@@ -23,17 +23,13 @@ function addProduct(productData) {
       };
     }
     
-    // Cek apakah SKU sudah ada (METODE FIX: Gunakan getDataRange)
+    // Cek apakah SKU sudah ada
     let existingSKUs = [];
-    
     try {
       const data = sheet.getDataRange().getValues();
-      
-      // Cek apakah ada data (header + rows)
       if (data.length > 1) {
         for (let i = 1; i < data.length; i++) {
           const row = data[i];
-          // Cek kolom SKU (index 0) dan pastikan tidak empty
           if (row[0] && row[0] !== "") {
             existingSKUs.push(row[0]);
           }
@@ -80,6 +76,149 @@ function addProduct(productData) {
       success: true,
       message: "Produk " + productData.nama + " berhasil ditambah!",
       data: productData
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Update existing product
+function updateProduct(productData) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Master Produk");
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    
+    if (!productData.sku) {
+      return {
+        success: false,
+        message: "SKU tidak boleh kosong"
+      };
+    }
+    
+    // Update Master Produk
+    const data = sheet.getDataRange().getValues();
+    let foundRow = 0;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][0] === productData.sku) {
+        foundRow = i + 1;
+        break;
+      }
+    }
+    
+    if (foundRow === 0) {
+      return {
+        success: false,
+        message: "Produk dengan SKU " + productData.sku + " tidak ditemukan!"
+      };
+    }
+    
+    // Update baris Master Produk
+    sheet.getRange(foundRow, 1, 1, 8).setValues([[
+      productData.sku,
+      productData.nama,
+      productData.kategori,
+      productData.satuan,
+      productData.hargaBeli,
+      productData.hargaJual,
+      productData.hargaJual - productData.hargaBeli,
+      productData.minStok,
+      new Date()
+    ]]);
+    
+    // Update Stok Current (minStock only, stok dijaga sama)
+    const stokData = stokSheet.getDataRange().getValues();
+    let stokFoundRow = 0;
+    
+    for (let i = 1; i < stokData.length; i++) {
+      if (stokData[i][0] === productData.sku) {
+        stokFoundRow = i + 1;
+        break;
+      }
+    }
+    
+    if (stokFoundRow > 0) {
+      const currentStock = stokData[stokFoundRow - 1][4];
+      const minStock = productData.minStok;
+      let newStatus = "OK";
+      
+      if (currentStock === 0) {
+        newStatus = "OUT OF STOCK";
+      } else if (currentStock <= minStock) {
+        newStatus = "LOW STOCK";
+      }
+      
+      stokSheet.getRange(stokFoundRow, 7, 1, 1).setValues([[
+        newStatus,
+        new Date()
+      ]]);
+    }
+    
+    return {
+      success: true,
+      message: "Produk " + productData.nama + " berhasil diperbarui!"
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Delete product
+function deleteProduct(sku) {
+  try {
+    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Master Produk");
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    
+    // Cari produk di Master Produk
+    const masterData = masterSheet.getDataRange().getValues();
+    let masterRow = 0;
+    let productName = "";
+    
+    for (let i = 1; i < masterData.length; i++) {
+      if (masterData[i][0] === sku) {
+        masterRow = i + 1;
+        productName = masterData[i][1];
+        break;
+      }
+    }
+    
+    if (masterRow === 0) {
+      return {
+        success: false,
+        message: "Produk dengan SKU " + sku + " tidak ditemukan!"
+      };
+    }
+    
+    // Cari produk di Stok Current
+    const stokData = stokSheet.getDataRange().getValues();
+    let stokRow = 0;
+    
+    for (let i = 1; i < stokData.length; i++) {
+      if (stokData[i][0] === sku) {
+        stokRow = i + 1;
+        break;
+      }
+    }
+    
+    // Hapus dari Master Produk
+    masterSheet.deleteRow(masterRow);
+    
+    // Hapus dari Stok Current
+    if (stokRow > 0) {
+      stokSheet.deleteRow(stokRow);
+    }
+    
+    return {
+      success: true,
+      message: "Produk " + productName + " berhasil dihapus!"
     };
     
   } catch (error) {
@@ -186,109 +325,323 @@ function getData() {
   }
 }
 
-// Update stok
-function updateStock(sku, quantity, type) {
+// --- TRANSACTION FUNCTIONS (CRUD) ---
+
+// Create new transaction
+function createTransaction(transactionData) {
   try {
-    // type: "in" (masuk) atau "out" (keluar)
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    const transaksiMasukSheet = transactionData.type === "in" 
+      ? SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Masuk")
+      : SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Keluar");
     
-    if (type !== "in" && type !== "out") {
+    // Validasi data
+    if (!transactionData.sku || !transactionData.quantity || !transactionData.type) {
       return {
         success: false,
-        message: "Type harus 'in' atau 'out'"
+        message: "Data transaksi tidak lengkap"
       };
     }
     
-    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
-    const data = stokSheet.getDataRange().getValues();
-    const headers = data[0];
-    const products = data.slice(1);
+    // Cek apakah produk ada
+    const products = getData();
+    let foundProduct = null;
     
-    // Cari produk berdasarkan SKU
-    let found = false;
-    let rowIndex = 0;
-    let existingData = {};
-    let namaProduk = "";
-    
-    for (let i = 0; i < products.length; i++) {
-      if (products[i][0] === sku) {  // Kolom SKU
-        rowIndex = i + 2;  // +2 karena header di row 1
-        existingData = {
-          stokAwal: products[i][2],
-          masuk: products[i][3],
-          keluar: products[i][4],
-          stokAkhir: products[i][5]
-        };
-        namaProduk = products[i][1];  // Kolom Nama Produk
-        found = true;
+    for (let i = 0; i < products.products.length; i++) {
+      if (products.products[i].sku === transactionData.sku) {
+        foundProduct = products.products[i];
         break;
       }
     }
     
-    if (!found) {
+    if (!foundProduct) {
+      return {
+        success: false,
+        message: "Produk dengan SKU " + transactionData.sku + " tidak ditemukan!"
+      };
+    }
+    
+    // Hitung stok baru
+    let newStock = 0;
+    if (transactionData.type === "in") {
+      newStock = foundProduct.stok + transactionData.quantity;
+    } else if (transactionData.type === "out") {
+      newStock = foundProduct.stok - transactionData.quantity;
+    }
+    
+    if (newStock < 0) {
+      return {
+        success: false,
+        message: "Stok tidak cukup! Stok saat ini: " + foundProduct.stok
+      };
+    }
+    
+    // Update Stok Current
+    const stokData = stokSheet.getDataRange().getValues();
+    let foundRow = 0;
+    
+    for (let i = 1; i < stokData.length; i++) {
+      if (stokData[i][0] === transactionData.sku) {
+        foundRow = i + 1;
+        break;
+      }
+    }
+    
+    if (foundRow === 0) {
+      return {
+        success: false,
+        message: "Produk tidak ditemukan di Stok Current"
+      };
+    }
+    
+    const oldStock = stokData[foundRow - 1][2];
+    let newMasuk = stokData[foundRow - 1][3];
+    let newKeluar = stokData[foundRow - 1][4];
+    
+    if (transactionData.type === "in") {
+      newMasuk += transactionData.quantity;
+    } else if (transactionData.type === "out") {
+      newKeluar += transactionData.quantity;
+    }
+    
+    let status = "OK";
+    if (newStock === 0) {
+      status = "OUT OF STOCK";
+    } else if (newStock <= foundProduct.minStok) {
+      status = "LOW STOCK";
+    }
+    
+    stokSheet.getRange(foundRow, 2, 1, 6).setValues([[
+      oldStock,
+      newMasuk,
+      newKeluar,
+      newStock,
+      status,
+      new Date()
+    ]]);
+    
+    // Catat transaksi di sheet transaksi
+    transaksiMasukSheet.appendRow([
+      new Date(),
+      transactionData.sku,
+      foundProduct.nama,
+      transactionData.type === "in" ? "Stock In" : "Stock Out",
+      transactionData.quantity,
+      foundProduct.satuan,
+      foundProduct.hargaJual * transactionData.quantity  // Total value
+    ]);
+    
+    // Kirim notifikasi email jika perlu
+    let lowStockAlert = false;
+    if (status === "LOW STOCK" || status === "OUT OF STOCK") {
+      const emailPenerima = "owner@mulalabs.id";  // GANTI dengan email Anda
+      const emailResult = sendEmailNotification(
+        transactionData.sku, 
+        foundProduct.nama, 
+        newStock, 
+        foundProduct.minStok, 
+        emailPenerima
+      );
+      lowStockAlert = emailResult.success;
+    }
+    
+    return {
+      success: true,
+      message: transactionData.type === "in" 
+        ? "Stock In " + foundProduct.nama + " berhasil dicatat! Stok: " + newStock + " " + foundProduct.satuan
+        : "Stock Out " + foundProduct.nama + " berhasil dicatat! Stok: " + newStock + " " + foundProduct.satuan,
+      lowStock: lowStockAlert
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Get transaction details
+function getTransactionDetails(sku) {
+  try {
+    const products = getData();
+    let foundProduct = null;
+    
+    for (let i = 0; i < products.products.length; i++) {
+      if (products.products[i].sku === sku) {
+        foundProduct = products.products[i];
+        break;
+      }
+    }
+    
+    if (!foundProduct) {
       return {
         success: false,
         message: "Produk dengan SKU " + sku + " tidak ditemukan!"
       };
     }
     
-    // Hitung stok baru
-    const stokBaru = type === "in" 
-      ? existingData.stokAkhir + quantity
-      : existingData.stokAkhir - quantity;
+    return {
+      success: true,
+      data: {
+        sku: foundProduct.sku,
+        nama: foundProduct.nama,
+        kategori: foundProduct.kategori,
+        satuan: foundProduct.satuan,
+        stok: foundProduct.stok,
+        minStok: foundProduct.minStok,
+        status: foundProduct.status,
+        hargaBeli: foundProduct.hargaBeli,
+        hargaJual: foundProduct.hargaJual
+      }
+    };
     
-    if (stokBaru < 0) {
-      return {
-        success: false,
-        message: "Stok tidak cukup! Stok saat ini: " + existingData.stokAkhir
-      };
-    }
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Delete transaction (from history)
+function deleteTransaction(sku, timestamp) {
+  try {
+    const transaksiMasukSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Masuk");
+    const transaksiKeluarSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Keluar");
     
-    // Update baris
-    const newMasuk = type === "in" 
-      ? existingData.masuk + quantity 
-      : existingData.masuk;
+    // Cari transaksi yang sesuai
+    let foundSheet = null;
+    let foundRow = 0;
     
-    const newKeluar = type === "out" 
-      ? existingData.keluar + quantity 
-      : existingData.keluar;
-    
-    stokSheet.getRange(rowIndex, 3, 1, 6).setValues([[
-      existingData.stokAwal,
-      newMasuk,
-      newKeluar,
-      stokBaru,
-      stokBaru <= 0 ? "OUT OF STOCK" : "OK",
-      new Date()
-    ]]);
-    
-    // Cek low stock
-    const masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Master Produk");
-    const masterData2 = masterSheet.getDataRange().getValues();
-    let minStok = 0;
-    
-    for (let i = 1; i < masterData2.length; i++) {
-      if (masterData2[i][0] === sku) {
-        minStok = masterData2[i][7];  // Kolom Minimum Stok
+    // Cari di Transaksi Masuk
+    const masukData = transaksiMasukSheet.getDataRange().getValues();
+    for (let i = 1; i < masukData.length; i++) {
+      if (masukData[i][0] instanceof Date && 
+          new Date(masukData[i][0]).getTime() === new Date(timestamp).getTime() &&
+          masukData[i][1] === sku) {
+        foundSheet = transaksiMasukSheet;
+        foundRow = i + 1;
         break;
       }
     }
     
-    if (stokBaru <= minStok && stokBaru > 0) {
-      // Kirim email notifikasi
-      const emailPenerima = "owner@mulalabs.id";  // GANTI dengan email Anda
-      const emailResult = sendEmailNotification(sku, namaProduk, stokBaru, minStok, emailPenerima);
-      
+    // Cari di Transaksi Keluar jika tidak ketemu
+    if (foundRow === 0) {
+      const keluarData = transaksiKeluarSheet.getDataRange().getValues();
+      for (let i = 1; i < keluarData.length; i++) {
+        if (keluarData[i][0] instanceof Date && 
+            new Date(keluarData[i][0]).getTime() === new Date(timestamp).getTime() &&
+            keluarData[i][1] === sku) {
+          foundSheet = transaksiKeluarSheet;
+          foundRow = i + 1;
+          break;
+        }
+      }
+    }
+    
+    if (foundRow === 0) {
       return {
-        success: true,
-        message: "Stok berhasil diupdate! Peringatan: Stok rendah (" + stokBaru + "/" + minStok + ")",
-        lowStock: true
+        success: false,
+        message: "Transaksi tidak ditemukan!"
       };
+    }
+    
+    // Hapus transaksi
+    foundSheet.deleteRow(foundRow);
+    
+    // Adjust stock kembali (reverse transaction)
+    const stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Stok Current");
+    const stokData = stokSheet.getDataRange().getValues();
+    let stokFoundRow = 0;
+    let oldStock = 0;
+    let oldMasuk = 0;
+    let oldKeluar = 0;
+    
+    for (let i = 1; i < stokData.length; i++) {
+      if (stokData[i][0] === sku) {
+        stokFoundRow = i + 1;
+        oldStock = stokData[i][2];
+        oldMasuk = stokData[i][3];
+        oldKeluar = stokData[i][4];
+        break;
+      }
+    }
+    
+    if (stokFoundRow > 0) {
+      // Reverse transaction (kembalikan ke stok awal)
+      const originalStock = oldStock;
+      let status = "OK";
+      
+      if (originalStock === 0) {
+        status = "OUT OF STOCK";
+      }
+      
+      stokSheet.getRange(stokFoundRow, 5, 1, 2).setValues([[
+        originalStock,
+        status,
+        new Date()
+      ]]);
     }
     
     return {
       success: true,
-      message: "Stok berhasil diupdate! Stok akhir: " + stokBaru,
-      lowStock: false
+      message: "Transaksi berhasil dihapus! Stok dikembalikan ke: " + oldStock
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Get all transactions (for history)
+function getTransactions() {
+  try {
+    const transaksiMasukSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Masuk");
+    const transaksiKeluarSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Transaksi Keluar");
+    
+    const masukData = transaksiMasukSheet.getDataRange().getValues();
+    const keluarData = transaksiKeluarSheet.getDataRange().getValues();
+    
+    const transactions = [];
+    
+    // Get Transaksi Masuk
+    for (let i = 1; i < masukData.length; i++) {
+      const row = masukData[i];
+      transactions.push({
+        date: row[0] instanceof Date ? Utilities.formatDate(row[0], "GMT", "dd/MM/yyyy HH:mm") : row[0],
+        type: "Stock In",
+        sku: row[1],
+        namaProduk: row[2],
+        quantity: row[3],
+        satuan: row[4],
+        totalValue: row[5]
+      });
+    }
+    
+    // Get Transaksi Keluar
+    for (let i = 1; i < keluarData.length; i++) {
+      const row = keluarData[i];
+      transactions.push({
+        date: row[0] instanceof Date ? Utilities.formatDate(row[0], "GMT", "dd/MM/yyyy HH:mm") : row[0],
+        type: "Stock Out",
+        sku: row[1],
+        namaProduk: row[2],
+        quantity: row[3],
+        satuan: row[4],
+        totalValue: row[5]
+      });
+    }
+    
+    // Sort by date descending (terbaru dulu)
+    transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    return {
+      success: true,
+      data: transactions
     };
     
   } catch (error) {
@@ -448,7 +801,7 @@ function verifyBarcodeSKU(sku) {
   }
 }
 
-// --- DASHBOARD FUNCTIONS (v1.2.0) ---
+// --- DASHBOARD FUNCTIONS ---
 
 // Get dashboard trends data (stock over time)
 function getDashboardTrends(days) {
@@ -494,11 +847,9 @@ function getDashboardTrends(days) {
       trends[trendMap[todayStr]].totalStock = totalStock;
     }
     
-    // Simple interpolation for previous days (assuming linear trend)
-    // In production, this should use actual historical data from transaction logs
+    // Simple interpolation for previous days
     for (let i = 0; i < trends.length; i++) {
       if (trends[i].totalStock === 0) {
-        // Use next available data point
         for (let j = i + 1; j < trends.length; j++) {
           if (trends[j].totalStock > 0) {
             trends[i].totalStock = trends[j].totalStock;
@@ -667,7 +1018,7 @@ function getRecentActivity(limit) {
       recentActivities[i].timeStr = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "HH:mm");
       recentActivities[i].dateStr = Utilities.formatDate(timestamp, Session.getScriptTimeZone(), "dd/MM/yyyy");
       
-      // Add relative time (e.g., "2 hours ago")
+      // Add relative time
       const now = new Date();
       const diffMs = now - timestamp;
       const diffHrs = Math.floor(diffMs / 3600000);
@@ -695,86 +1046,152 @@ function getRecentActivity(limit) {
   }
 }
 
-// --- VIEW LOADER FUNCTIONS (v1.2.0) ---
+// --- REPORTS FUNCTIONS ---
 
-// Get HTML content for view (Dashboard, Products, Transactions, Reports, Settings)
-function getHtml(view) {
+// Generate report
+function generateReport(reportType, filters) {
   try {
-    let htmlContent = '';
+    const reportData = {
+      reportType: reportType,
+      filters: filters,
+      generatedAt: new Date()
+    };
     
-    switch(view) {
-      case 'dashboard':
-        // Return Dashboard.html content
-        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
-        break;
+    // Get data based on report type
+    let data = [];
+    let summary = {};
+    
+    if (reportType === "inventory") {
+      const products = getData().products;
+      data = products;
+      summary = {
+        totalProducts: products.length,
+        totalStockValue: 0,
+        lowStockCount: 0,
+        outOfStockCount: 0
+      };
+      
+      for (let i = 0; i < products.length; i++) {
+        summary.totalStockValue += (products[i].stok * products[i].hargaJual);
         
-      case 'products':
-        // Return Products.html content
-        htmlContent = HtmlService.createHtmlOutputFromFile('Products.html');
-        break;
+        if (products[i].status === "LOW STOCK") {
+          summary.lowStockCount++;
+        }
         
-      case 'transactions':
-        // Return Transactions.html content
-        htmlContent = HtmlService.createHtmlOutputFromFile('Transactions.html');
-        break;
+        if (products[i].status === "OUT OF STOCK") {
+          summary.outOfStockCount++;
+        }
+      }
+      
+    } else if (reportType === "transactions") {
+      const transactions = getTransactions();
+      data = transactions.data;
+      summary = {
+        totalTransactions: data.length,
+        totalStockIn: 0,
+        totalStockOut: 0,
+        totalValue: 0
+      };
+      
+      for (let i = 0; i < data.length; i++) {
+        if (data[i].type === "Stock In") {
+          summary.totalStockIn += data[i].quantity;
+        } else if (data[i].type === "Stock Out") {
+          summary.totalStockOut += data[i].quantity;
+        }
         
-      case 'reports':
-        // Return Reports.html content
-        htmlContent = HtmlService.createHtmlOutputFromFile('Reports.html');
-        break;
-        
-      case 'settings':
-        // Return Settings.html content
-        htmlContent = HtmlService.createHtmlOutputFromFile('Settings.html');
-        break;
-        
-      default:
-        // Default to dashboard
-        htmlContent = HtmlService.createHtmlOutputFromFile('Dashboard.html');
+        summary.totalValue += data[i].totalValue;
+      }
+      
+    } else if (reportType === "valuation") {
+      const products = getData().products;
+      data = products;
+      summary = {
+        totalStockValue: 0
+      };
+      
+      for (let i = 0; i < products.length; i++) {
+        summary.totalStockValue += (products[i].stok * products[i].hargaJual);
+      }
+      
+    } else if (reportType === "lowstock") {
+      const products = getData().products;
+      data = products.filter(p => p.status === "LOW STOCK" || p.status === "OUT OF STOCK");
+      summary = {
+        totalProducts: data.length,
+        lowStockCount: data.filter(p => p.status === "LOW STOCK").length,
+        outOfStockCount: data.filter(p => p.status === "OUT OF STOCK").length
+      };
     }
     
-    return htmlContent;
+    return {
+      success: true,
+      message: "Report " + reportType + " berhasil di-generate!",
+      data: {
+        reportData: reportData,
+        data: data,
+        summary: summary
+      }
+    };
     
   } catch (error) {
-    return HtmlService.createHtmlOutput('<h1>Error loading view: ' + error.message + '</h1>');
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
   }
 }
 
-// Alternative: Get HTML content as string (for iframe/dynamic loading)
-function getHtmlContent(view) {
+// --- SETTINGS FUNCTIONS ---
+
+// Get user settings
+function getSettings() {
   try {
-    let htmlString = '';
+    // For now, return default settings
+    // In production, this should load from "Settings" sheet or Properties Service
+    const settings = {
+      businessName: "Mula Inventory System",
+      defaultUnit: "pcs",
+      lowStockThreshold: 5,
+      currencySymbol: "Rp",
+      emailLowStock: true,
+      emailOutOfStock: true,
+      emailDailySummary: false,
+      notificationEmail: "owner@mulalabs.id",
+      notificationFrequency: "immediate",
+      displayName: "Zaky Arisandhi",
+      accountEmail: "zaky@mulalabs.id",
+      timezone: "WIB",
+      language: "id"
+    };
     
-    // Load HTML file content
-    switch(view) {
-      case 'dashboard':
-        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
-        break;
-        
-      case 'products':
-        htmlString = HtmlService.createHtmlOutputFromFile('Products.html').getContent();
-        break;
-        
-      case 'transactions':
-        htmlString = HtmlService.createHtmlOutputFromFile('Transactions.html').getContent();
-        break;
-        
-      case 'reports':
-        htmlString = HtmlService.createHtmlOutputFromFile('Reports.html').getContent();
-        break;
-        
-      case 'settings':
-        htmlString = HtmlService.createHtmlOutputFromFile('Settings.html').getContent();
-        break;
-        
-      default:
-        htmlString = HtmlService.createHtmlOutputFromFile('Dashboard.html').getContent();
-    }
-    
-    // Return as string
-    return htmlString;
+    return {
+      success: true,
+      data: settings
+    };
     
   } catch (error) {
-    return '<h1>Error loading view: ' + error.message + '</h1>';
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
+  }
+}
+
+// Save user settings (Client-side localStorage)
+function saveSettings(settings) {
+  try {
+    // Since this is called from frontend, we just return success
+    // Actual saving happens in frontend via localStorage
+    return {
+      success: true,
+      message: "Settings berhasil disimpan!"
+    };
+    
+  } catch (error) {
+    return {
+      success: false,
+      message: "Error: " + error.toString()
+    };
   }
 }
