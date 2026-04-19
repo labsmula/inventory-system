@@ -449,9 +449,13 @@ function stokKeluar(sku, jumlah, keterangan) {
     
     const stokBaru = stokAkhirLama - jumlah;
     const keluarBaru = keluarLama + jumlah;
-    let status = 'OK';
-    if (stokBaru === 0) status = 'OUT OF STOCK';
-    else if (stokBaru <= minStok) status = 'LOW STOCK';
+    const totalMasuk = masukLama;
+    let status = 'BELUM DIISI';
+    if (totalMasuk > 0) {
+      if (stokBaru === 0) status = 'OUT OF STOCK';
+      else if (stokBaru <= minStok) status = 'LOW STOCK';
+      else status = 'OK';
+    }
     
     stok.getRange(rowIndex, 5).setValue(keluarBaru);
     stok.getRange(rowIndex, 6).setValue(stokBaru);
@@ -521,10 +525,11 @@ function generateReport(type, startDate, endDate) {
       const hargaJual = masterData[i][5];
       const minStok = masterData[i][7] || 10;
       
-      let stokAkhir = 0, statusStok = 'N/A';
+      let stokAkhir = 0, statusStok = 'BELUM DIISI', masukCount = 0;
       for (let j = 1; j < stokData.length; j++) {
         if (stokData[j][0] === sku) {
           stokAkhir = stokData[j][5];
+          masukCount = stokData[j][3];
           statusStok = stokData[j][6];
           break;
         }
@@ -763,9 +768,14 @@ function refreshDashboard() {
         if (masterData[j][0] === sku) { minStok = masterData[j][7] || 10; break; }
       }
       
-      let status = 'OK';
-      if (stokAkhir === 0) status = 'OUT OF STOCK';
-      else if (stokAkhir <= minStok) status = 'LOW STOCK';
+      // Hanya alert jika pernah ada stok masuk (totalMasuk > 0)
+      const totalMasuk = stokData[i][3];
+      let status = 'BELUM DIISI';
+      if (totalMasuk > 0) {
+        if (stokAkhir === 0) status = 'OUT OF STOCK';
+        else if (stokAkhir <= minStok) status = 'LOW STOCK';
+        else status = 'OK';
+      }
       
       stok.getRange(i + 1, 7).setValue(status);
     }
@@ -848,7 +858,9 @@ function getData() {
     var stokData = stokSheet.getDataRange().getValues();
     var stokMap = {};
     for (var i = 1; i < stokData.length; i++) {
-      if (stokData[i][0]) stokMap[stokData[i][0]] = stokData[i][5];
+      if (stokData[i][0]) {
+        stokMap[stokData[i][0]] = { stok: stokData[i][5], masuk: stokData[i][3] };
+      }
     }
     var products = [];
     var totalProducts = 0, lowStockCount = 0, outOfStockCount = 0, inventoryValue = 0;
@@ -856,14 +868,19 @@ function getData() {
       var row = masterData[i];
       if (!row[0]) continue;
       var sku = row[0], nama = row[1], kat = row[2], sat = row[3], hargaBeli = row[4], hargaJual = row[5], minStok = row[7];
-      var stokAkhir = stokMap[sku] || 0;
-      var status = 'OK';
-      if (stokAkhir === 0) status = 'OUT OF STOCK';
-      else if (stokAkhir <= minStok) status = 'LOW STOCK';
+      var stokInfo = stokMap[sku] || { stok: 0, masuk: 0 };
+      var stokAkhir = stokInfo.stok;
+      // Hanya alert jika pernah ada stok masuk
+      var status = 'BELUM DIISI';
+      if (stokInfo.masuk > 0) {
+        if (stokAkhir === 0) status = 'OUT OF STOCK';
+        else if (stokAkhir <= minStok) status = 'LOW STOCK';
+        else status = 'OK';
+      }
       totalProducts++;
       inventoryValue += (stokAkhir * hargaBeli);
-      if (stokAkhir === 0) outOfStockCount++;
-      else if (stokAkhir <= minStok) lowStockCount++;
+      if (status === 'OUT OF STOCK') outOfStockCount++;
+      else if (status === 'LOW STOCK') lowStockCount++;
       products.push({ sku: sku, nama: nama, kategori: kat, satuan: sat, hargaBeli: hargaBeli, hargaJual: hargaJual, margin: row[6], minStok: minStok, stok: stokAkhir, status: status });
     }
     var inventoryValueFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(inventoryValue);
@@ -900,9 +917,12 @@ function updateStock(sku, quantity, type) {
     for (var i = 1; i < masterData.length; i++) {
       if (masterData[i][0] === sku) { minStok = masterData[i][7] || 10; break; }
     }
-    var status = 'OK';
-    if (stokBaru === 0) status = 'OUT OF STOCK';
-    else if (stokBaru <= minStok) status = 'LOW STOCK';
+    var status = 'BELUM DIISI';
+    if (newMasuk > 0) {
+      if (stokBaru === 0) status = 'OUT OF STOCK';
+      else if (stokBaru <= minStok) status = 'LOW STOCK';
+      else status = 'OK';
+    }
     stokSheet.getRange(rowIndex, 3, 1, 6).setValues([[existingData.stokAwal, newMasuk, newKeluar, stokBaru, status, new Date()]]);
     // Log transaction
     var transSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(type === 'in' ? 'Transaksi Masuk' : 'Transaksi Keluar');
