@@ -98,5 +98,6 @@ Pastikan kode ter-copy lengkap dan tidak ada spasi ekstra. Jalankan ulang setupI
 
 ---
 
-**Dibuat oleh Mula Labs** — github.com/labsmula
-**Konten:** @mulalabs di TikTok & Instagram
+**Dibuat oleh Mula Labs** — [github.com/labsmula](https://github.com/labsmula)
+**Konten:** [@mulalabs](https://tiktok.com/@mulalabs) di TikTok & Instagram
+**Kontak:** hello@mulalabs.tech | +62 895 1830 1399

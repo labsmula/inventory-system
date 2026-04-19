@@ -180,16 +180,15 @@ mula-labs-inventory-system/
 
 ---
 
-## 📞 Support
+## 📞 Kontak
 
 **Mula Labs**
-- **Email:** support@mulalabs.id
-- **WhatsApp:** +62 812 3456 7890
-- **Website:** www.mulalabs.id
-
-**Jam Operasional:**
-- Senin - Jumat: 09:00 - 18:00 WIB
-- Sabtu - Minggu: Tutup
+- **Email:** hello@mulalabs.tech
+- **WhatsApp:** +62 895 1830 1399
+- **TikTok:** [@mulalabs](https://tiktok.com/@mulalabs)
+- **Instagram:** [@mulalabs](https://instagram.com/mulalabs)
+- **GitHub:** [labsmula](https://github.com/labsmula)
+- **Lokasi:** Remote — Indonesia
 
 ---
 
