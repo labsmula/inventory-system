@@ -116,7 +116,7 @@ function addInventoryMenu() {
 // ➕ TAMBAH PRODUK
 // ==========================================
 
-function addProduct(sku, nama, kategori, satuan, hargaBeli, hargaJual, minStok) {
+function addProductSimple(sku, nama, kategori, satuan, hargaBeli, hargaJual, minStok) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const master = ss.getSheetByName('Master Produk');
@@ -151,7 +151,7 @@ function uiAddProduct() {
   const parts = result.getResponseText().split('|').map(s => s.trim());
   if (parts.length < 4) { ui.alert('❌ Format salah. Minimal: SKU | Nama | Kategori | Harga Beli | Harga Jual'); return; }
   
-  const res = addProduct(parts[0], parts[1], parts[2], parts[3], Number(parts[4]) || 0, Number(parts[5]) || 0, Number(parts[6]) || 10);
+  const res = addProductSimple(parts[0], parts[1], parts[2], parts[3], Number(parts[4]) || 0, Number(parts[5]) || 0, Number(parts[6]) || 10);
   ui.alert(res.message);
   if (res.success) refreshDashboard();
 }
@@ -649,6 +649,8 @@ function generateQRCode(sku) {
     // Generate QR Code via Google Chart API
     const qrUrl = 'https://chart.googleapis.com/chart?chs=300x300&cht=qr&chl=' + encodeURIComponent(qrData) + '&choe=UTF-8';
     
+    const webAppURL = ScriptApp.getService().getUrl();
+    
     return {
       success: true,
       message: '✅ QR Code untuk "' + namaProduk + '" berhasil di-generate!',
@@ -657,7 +659,8 @@ function generateQRCode(sku) {
         nama: namaProduk,
         hargaJual: hargaJual,
         qrUrl: qrUrl,
-        qrData: qrData
+        qrData: qrData,
+        url: webAppURL + '?sku=' + sku
       }
     };
   } catch (error) {
@@ -803,4 +806,212 @@ function getAllData() {
   }
   
   return { success: true, products: products };
+}
+
+// ==========================================
+// 🌐 WEB APP FUNCTIONS
+// ==========================================
+
+function doGet() {
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('Mula Inventory System v1.3.0')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function addProduct(productDataOrSku, nama, kategori, satuan, hargaBeli, hargaJual, minStok) {
+  // Handle object format (from web app)
+  if (typeof productDataOrSku === 'object' && productDataOrSku !== null) {
+    var p = productDataOrSku;
+    if (!p.sku || !p.nama || !p.hargaBeli || !p.hargaJual || !p.minStok) {
+      return { success: false, message: 'Data produk tidak lengkap' };
+    }
+    // Check for duplicate SKU
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Produk');
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (data[i][0] === p.sku) return { success: false, message: 'SKU sudah terdaftar!' };
+    }
+    sheet.appendRow([p.sku, p.nama, p.kategori || '-', p.satuan || 'pcs', p.hargaBeli, p.hargaJual, p.hargaJual - p.hargaBeli, p.minStok, new Date()]);
+    var stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stok Current');
+    stokSheet.appendRow([p.sku, p.nama, 0, 0, 0, 0, 'OK', new Date()]);
+    return { success: true, message: 'Produk ' + p.nama + ' berhasil ditambah!', data: p };
+  }
+  // Handle individual params (from menu)
+  return addProductSimple(productDataOrSku, nama, kategori, satuan, hargaBeli, hargaJual, minStok);
+}
+
+function getData() {
+  try {
+    var masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Produk');
+    var stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stok Current');
+    var masterData = masterSheet.getDataRange().getValues();
+    var stokData = stokSheet.getDataRange().getValues();
+    var stokMap = {};
+    for (var i = 1; i < stokData.length; i++) {
+      if (stokData[i][0]) stokMap[stokData[i][0]] = stokData[i][5];
+    }
+    var products = [];
+    var totalProducts = 0, lowStockCount = 0, outOfStockCount = 0, inventoryValue = 0;
+    for (var i = 1; i < masterData.length; i++) {
+      var row = masterData[i];
+      if (!row[0]) continue;
+      var sku = row[0], nama = row[1], kat = row[2], sat = row[3], hargaBeli = row[4], hargaJual = row[5], minStok = row[7];
+      var stokAkhir = stokMap[sku] || 0;
+      var status = 'OK';
+      if (stokAkhir === 0) status = 'OUT OF STOCK';
+      else if (stokAkhir <= minStok) status = 'LOW STOCK';
+      totalProducts++;
+      inventoryValue += (stokAkhir * hargaBeli);
+      if (stokAkhir === 0) outOfStockCount++;
+      else if (stokAkhir <= minStok) lowStockCount++;
+      products.push({ sku: sku, nama: nama, kategori: kat, satuan: sat, hargaBeli: hargaBeli, hargaJual: hargaJual, margin: row[6], minStok: minStok, stok: stokAkhir, status: status });
+    }
+    var inventoryValueFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(inventoryValue);
+    return { products: products, dashboard: { totalProducts: totalProducts, lowStockCount: lowStockCount, outOfStockCount: outOfStockCount, inventoryValue: inventoryValueFormatted } };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
+}
+
+function updateStock(sku, quantity, type) {
+  try {
+    if (type !== 'in' && type !== 'out') return { success: false, message: "Type harus 'in' atau 'out'" };
+    var stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stok Current');
+    var data = stokSheet.getDataRange().getValues();
+    var found = false, rowIndex = 0, existingData = {}, namaProduk = '';
+    for (var i = 0; i < data.length - 1; i++) {
+      if (data[i + 1][0] === sku) {
+        rowIndex = i + 2;
+        existingData = { stokAwal: data[i + 1][2], masuk: data[i + 1][3], keluar: data[i + 1][4], stokAkhir: data[i + 1][5] };
+        namaProduk = data[i + 1][1];
+        found = true;
+        break;
+      }
+    }
+    if (!found) return { success: false, message: 'Produk dengan SKU ' + sku + ' tidak ditemukan!' };
+    var stokBaru = type === 'in' ? existingData.stokAkhir + quantity : existingData.stokAkhir - quantity;
+    if (stokBaru < 0) return { success: false, message: 'Stok tidak cukup! Stok saat ini: ' + existingData.stokAkhir };
+    var newMasuk = type === 'in' ? existingData.masuk + quantity : existingData.masuk;
+    var newKeluar = type === 'out' ? existingData.keluar + quantity : existingData.keluar;
+    // Get minStok for status
+    var masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Produk');
+    var masterData = masterSheet.getDataRange().getValues();
+    var minStok = 10;
+    for (var i = 1; i < masterData.length; i++) {
+      if (masterData[i][0] === sku) { minStok = masterData[i][7] || 10; break; }
+    }
+    var status = 'OK';
+    if (stokBaru === 0) status = 'OUT OF STOCK';
+    else if (stokBaru <= minStok) status = 'LOW STOCK';
+    stokSheet.getRange(rowIndex, 3, 1, 6).setValues([[existingData.stokAwal, newMasuk, newKeluar, stokBaru, status, new Date()]]);
+    // Log transaction
+    var transSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(type === 'in' ? 'Transaksi Masuk' : 'Transaksi Keluar');
+    if (transSheet) transSheet.appendRow([new Date(), sku, namaProduk, quantity, '-']);
+    return { success: true, message: 'Stok berhasil diupdate! Stok akhir: ' + stokBaru, lowStock: status === 'LOW STOCK' };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
+}
+
+function getDashboardTrends(days) {
+  try {
+    var stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stok Current');
+    var data = stokSheet.getDataRange().getValues();
+    var totalStock = 0;
+    for (var i = 1; i < data.length; i++) { if (data[i][5]) totalStock += data[i][5]; }
+    var today = new Date();
+    var trends = [];
+    for (var i = 0; i <= days; i++) {
+      var date = new Date(today);
+      date.setDate(today.getDate() - (days - i));
+      var dateStr = Utilities.formatDate(date, 'GMT', 'dd/MM/yyyy');
+      trends.push({ date: dateStr, totalStock: totalStock });
+    }
+    return { success: true, data: trends };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
+}
+
+function getCategoryDistribution() {
+  try {
+    var masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Produk');
+    var data = masterSheet.getDataRange().getValues();
+    var categoryCount = {};
+    var totalProducts = 0;
+    for (var i = 1; i < data.length; i++) {
+      var kategori = data[i][2];
+      if (kategori && data[i][0]) {
+        categoryCount[kategori] = (categoryCount[kategori] || 0) + 1;
+        totalProducts++;
+      }
+    }
+    var distribution = [];
+    for (var key in categoryCount) {
+      distribution.push({ category: key, count: categoryCount[key], percentage: Math.round((categoryCount[key] / totalProducts) * 100) });
+    }
+    distribution.sort(function(a, b) { return b.count - a.count; });
+    return { success: true, data: distribution };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
+}
+
+function getRecentActivity(limit) {
+  try {
+    var stokSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Stok Current');
+    var data = stokSheet.getDataRange().getValues();
+    var activities = [];
+    for (var i = 1; i < data.length; i++) {
+      var sku = data[i][0], namaProduk = data[i][1], stokAwal = data[i][2], stokAkhir = data[i][5], lastUpdated = data[i][7];
+      if (stokAkhir !== stokAwal && lastUpdated) {
+        activities.push({ type: stokAkhir > stokAwal ? 'Stock In' : 'Stock Out', sku: sku, namaProduk: namaProduk, quantity: Math.abs(stokAkhir - stokAwal), timestamp: lastUpdated });
+      }
+    }
+    activities.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+    var recent = activities.slice(0, limit || 5);
+    var now = new Date();
+    for (var i = 0; i < recent.length; i++) {
+      var ts = new Date(recent[i].timestamp);
+      recent[i].timeStr = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'HH:mm');
+      recent[i].dateStr = Utilities.formatDate(ts, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+      var diffMs = now - ts;
+      var diffHrs = Math.floor(diffMs / 3600000);
+      var diffDays = Math.floor(diffMs / 86400000);
+      if (diffHrs < 1) recent[i].relativeTime = 'Just now';
+      else if (diffHrs < 24) recent[i].relativeTime = diffHrs + ' hour' + (diffHrs > 1 ? 's' : '') + ' ago';
+      else recent[i].relativeTime = diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' ago';
+    }
+    return { success: true, data: recent };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
+}
+
+function getTopSellers(limit) {
+  try {
+    var transSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Transaksi Keluar');
+    var data = transSheet.getDataRange().getValues();
+    var productSales = {};
+    for (var i = 1; i < data.length; i++) {
+      var sku = data[i][1], quantity = data[i][3];
+      if (sku && quantity) {
+        if (!productSales[sku]) productSales[sku] = { sku: sku, totalSold: 0, transactions: 0 };
+        productSales[sku].totalSold += quantity;
+        productSales[sku].transactions += 1;
+      }
+    }
+    var topSellers = Object.values(productSales).sort(function(a, b) { return b.totalSold - a.totalSold; });
+    topSellers = topSellers.slice(0, limit || 10);
+    var masterSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Master Produk');
+    var masterData = masterSheet.getDataRange().getValues();
+    for (var i = 0; i < topSellers.length; i++) {
+      for (var j = 1; j < masterData.length; j++) {
+        if (masterData[j][0] === topSellers[i].sku) { topSellers[i].namaProduk = masterData[j][1]; break; }
+      }
+    }
+    return { success: true, data: topSellers };
+  } catch (error) {
+    return { success: false, message: 'Error: ' + error.toString() };
+  }
 }
