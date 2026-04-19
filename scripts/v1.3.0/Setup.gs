@@ -10,14 +10,9 @@
 function setupInventory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Cek apakah sudah pernah di-setup
-  const alreadySetup = ss.getSheetByName('Master Produk');
-  
-  // Rename Sheet1 jadi Dashboard jika belum pernah setup
-  if (!alreadySetup) {
-    const s1 = ss.getSheetByName('Sheet1');
-    if (s1) s1.setName('Dashboard');
-  }
+  // Rename Sheet1 jadi Dashboard jika belum ada
+  const s1 = ss.getSheetByName('Sheet1');
+  if (s1 && !ss.getSheetByName('Dashboard')) s1.setName('Dashboard');
   
   // Helper: buat sheet kalau belum ada
   function getOrCreateSheet(name) {
