@@ -21,10 +21,14 @@ function setupInventory() {
     return sheet;
   }
   
+  function sheetHasData(sheet) {
+    const vals = sheet.getDataRange().getValues();
+    return vals.length > 0 && vals[0].some(v => v !== '');
+  }
+  
   // --- 1. Master Produk ---
   const master = getOrCreateSheet('Master Produk');
-  if (master.getLastRow() === 0) {
-    master.appendRow(['SKU', 'Nama Produk', 'Kategori', 'Satuan', 'Harga Beli', 'Harga Jual', 'Margin', 'Min Stok', 'Tanggal Input']);
+  if (!sheetHasData(master)) {(['SKU', 'Nama Produk', 'Kategori', 'Satuan', 'Harga Beli', 'Harga Jual', 'Margin', 'Min Stok', 'Tanggal Input']);
     master.getRange('A1:I1').setFontWeight('bold').setBackground('#4285f4').setFontColor('#ffffff');
     master.setColumnWidth(1, 120);
     master.setColumnWidth(2, 200);
@@ -45,8 +49,7 @@ function setupInventory() {
   
   // --- 2. Stok Current ---
   const stok = getOrCreateSheet('Stok Current');
-  if (stok.getLastRow() === 0) {
-    stok.appendRow(['SKU', 'Nama Produk', 'Stok Awal', 'Masuk', 'Keluar', 'Stok Akhir', 'Status', 'Last Updated']);
+  if (!sheetHasData(stok)) {(['SKU', 'Nama Produk', 'Stok Awal', 'Masuk', 'Keluar', 'Stok Akhir', 'Status', 'Last Updated']);
     stok.getRange('A1:H1').setFontWeight('bold').setBackground('#34a853').setFontColor('#ffffff');
     stok.setColumnWidth(1, 120);
     stok.setColumnWidth(2, 200);
@@ -54,8 +57,7 @@ function setupInventory() {
   
   // --- 3. Transaksi Masuk ---
   const masuk = getOrCreateSheet('Transaksi Masuk');
-  if (masuk.getLastRow() === 0) {
-    masuk.appendRow(['Tanggal', 'SKU', 'Nama Produk', 'Jumlah', 'Keterangan']);
+  if (!sheetHasData(masuk)) {(['Tanggal', 'SKU', 'Nama Produk', 'Jumlah', 'Keterangan']);
     masuk.getRange('A1:E1').setFontWeight('bold').setBackground('#fbbc04').setFontColor('#ffffff');
     masuk.setColumnWidth(1, 140);
     masuk.setColumnWidth(2, 120);
@@ -64,8 +66,7 @@ function setupInventory() {
   
   // --- 4. Transaksi Keluar ---
   const keluar = getOrCreateSheet('Transaksi Keluar');
-  if (keluar.getLastRow() === 0) {
-    keluar.appendRow(['Tanggal', 'SKU', 'Nama Produk', 'Jumlah', 'Keterangan']);
+  if (!sheetHasData(keluar)) {(['Tanggal', 'SKU', 'Nama Produk', 'Jumlah', 'Keterangan']);
     keluar.getRange('A1:E1').setFontWeight('bold').setBackground('#ea4335').setFontColor('#ffffff');
     keluar.setColumnWidth(1, 140);
     keluar.setColumnWidth(2, 120);
@@ -74,8 +75,7 @@ function setupInventory() {
   
   // --- 5. Dashboard ---
   const dash = getOrCreateSheet('Dashboard');
-  if (dash.getLastRow() === 0) {
-    dash.appendRow(['📊 DASHBOARD INVENTORIS']);
+  if (!sheetHasData(dash)) {(['📊 DASHBOARD INVENTORIS']);
     dash.getRange('A1').setFontWeight('bold').setFontSize(16).merge();
     dash.appendRow([]);
     dash.appendRow(['Total Produk', 'Stok Habis', 'Stok Rendah', 'Nilai Inventori']);
