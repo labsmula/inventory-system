@@ -26,9 +26,10 @@ Sistem inventory berbasis **Google Sheets + Google Apps Script** yang membantu U
 ### 2. **Backend Logic (Google Apps Script)**
 - `doGet()` — Serve HTML UI
 - `addProduct()` — Tambah produk baru
-- `getData()` — Fetch semua data produk
-- `updateStock()` — Update stok (masuk/keluar)
-- `sendEmailNotification()` — Email alert low stock
+- `stokMasuk()` — Catat stok masuk
+- `stokKeluar()` — Catat stok keluar
+- `setupInventory()` — Auto-setup semua sheet
+- `getAllData()` — Fetch semua data (integrasi)
 
 ### 3. **Database (Google Sheets)**
 - **Master Produk** — Database produk dengan margin
@@ -42,11 +43,7 @@ Sistem inventory berbasis **Google Sheets + Google Apps Script** yang membantu U
 - Out of Stock count
 - Inventory Value (IDR)
 
-### 5. **Email Notification**
-- Otomatis kirim email jika stok <= minimum
-- Kirim ke email owner UMKM
-
-### 6. **QR Code Generation** (NEW - v1.1.0)
+### 5. **QR Code Generation** (v1.1.0)
 - Generate QR codes untuk produk
 - Scan QR codes untuk quick access ke product details
 - Print QR codes pada product labels
@@ -127,7 +124,7 @@ Sistem inventory berbasis **Google Sheets + Google Apps Script** yang membantu U
 - Google Sheets: Free (15GB storage)
 - Google Apps Script: Free
 - Web App Deployment: Free
-- Email Notification: Free (via MailApp)
+- Dashboard: Free (otomatis)
 
 **Tidak ada biaya bulanan.**
 
@@ -216,7 +213,6 @@ mula-labs-inventory-system/
 ### **v1.0.0 (2026-04-06)**
 - Initial release
 - Core features: Add product, Dashboard, Stock management
-- Email notification system
 - Dashboard widgets (Total, Low Stock, Out of Stock, Value)
 - Complete documentation (User Manual, Troubleshooting, Client Package)
 
@@ -247,7 +243,7 @@ Distribusi bebas untuk penggunaan komersial dan non-komersial.
 - ✅ QR Code generation (functional)
 - ✅ Barcode scanning (placeholder)
 - ✅ Responsive design (mobile sidebar toggle, grid layouts)
-- ✅ Notification system (success/error messages)
+- ✅ Notification system (success/error/toast messages)
 - ✅ Loading states (spinner for async operations)
 - ✅ Modals (Add Product, QR Code)
 - ✅ Chart.js integration (charts for dashboard & reports)
@@ -276,7 +272,7 @@ Distribusi bebas untuk penggunaan komersial dan non-komersial.
 ### **v1.0.0 (2026-04-06)**
 - Initial release
 - Core features: Add product, Dashboard, Stock management
-- Email notification system
 - Dashboard widgets (Total, Low Stock, Out of Stock, Value)
 - Complete documentation (5 files)
+- Core features: Add product, Dashboard, Stock management
 
