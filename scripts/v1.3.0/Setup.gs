@@ -3,6 +3,24 @@
 // File: Setup.gs
 // Dibuat oleh Mula Labs — github.com/labsmula
 
+function resetInventory() {
+  const ui = SpreadsheetApp.getUi();
+  const confirm = ui.alert('⚠️ Reset Semua Data', 'Ini akan menghapus SEMUA sheet dan data inventori. Lanjutkan?', ui.ButtonSet.YES_NO);
+  if (confirm !== ui.Button.YES) return;
+  
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  // Keep one sheet, delete the rest
+  while (sheets.length > 1) {
+    ss.deleteSheet(sheets[sheets.length - 1]);
+  }
+  sheets[0].setName('Dashboard');
+  sheets[0].clear();
+  
+  setupInventory();
+  ui.alert('✅ Reset selesai! Semua data dihapus dan setup ulang.');
+}
+
 function setupInventory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
@@ -110,6 +128,8 @@ function addInventoryMenu() {
     .addItem('🎫 Generate QR Code', 'uiGenerateQR')
     .addSeparator()
     .addItem('🔄 Refresh Dashboard', 'refreshDashboard')
+    .addSeparator()
+    .addItem('⚠️ Reset Semua Data', 'resetInventory')
     .addSeparator()
     .addItem('🚀 Jalankan Setup Awal', 'setupInventory')
     .addToUi();
