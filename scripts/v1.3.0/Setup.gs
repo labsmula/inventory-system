@@ -10,9 +10,13 @@
 function setupInventory() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   
-  // Hapus sheet default jika ada
+  // Hapus sheet default jika ada (buat temp dulu biar ga error)
   const defaultSheet = ss.getSheetByName('Sheet1');
-  if (defaultSheet) ss.deleteSheet(defaultSheet);
+  if (defaultSheet) {
+    const tempSheet = ss.insertSheet('_temp_');
+    ss.deleteSheet(defaultSheet);
+    ss.deleteSheet(tempSheet);
+  }
   
   // --- 1. Master Produk ---
   const master = ss.insertSheet('Master Produk');
